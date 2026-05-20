@@ -14,12 +14,15 @@ use ratatui::{
 
 use crate::app::{App, Phase};
 
+/// Restore the terminal to normal mode (disable raw mode, leave alternate
+/// screen). Used on clean exit and in the panic hook.
 pub fn restore_terminal() -> io::Result<()> {
     disable_raw_mode()?;
     execute!(stdout(), LeaveAlternateScreen)?;
     Ok(())
 }
 
+/// Format a [`Duration`] as `[h:]mm:ss` for display.
 fn format_countdown(d: Duration) -> String {
     let total = d.as_secs();
     let h = total / 3600;
@@ -32,6 +35,7 @@ fn format_countdown(d: Duration) -> String {
     }
 }
 
+/// Draw the entire UI (timer block, countdown, progress gauge, key hints).
 pub fn draw(f: &mut Frame, app: &App) {
     let now = std::time::Instant::now();
     let remaining = app.remaining_at(now);

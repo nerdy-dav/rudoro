@@ -19,16 +19,21 @@ mod ui;
 use app::App;
 use ui::{draw, restore_terminal};
 
+/// CLI arguments parsed from the command line.
 #[derive(Parser, Debug)]
 #[command(name = "rudoro", about = "Terminal Pomodoro timer")]
 struct Args {
+    /// Work phase length in minutes.
     #[arg(long = "work-minutes", short = 'w', default_value_t = 25)]
     work_minutes: u32,
 
+    /// Rest phase length in minutes.
     #[arg(long = "rest-minutes", short = 'r', default_value_t = 5)]
     rest_minutes: u32,
 }
 
+/// Main event loop: advances the app at ~10 Hz, redraws the UI, and handles
+/// keyboard input (`q`/`Esc` to quit, `Space` to pause/resume).
 fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App) -> io::Result<()> {
     let tick = Duration::from_millis(100);
     loop {
@@ -52,6 +57,8 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App) -> 
     }
 }
 
+/// Parse arguments, initialise the terminal and app, install a panic hook
+/// that restores the terminal, then hand control to the event loop.
 fn main() -> io::Result<()> {
     let args = Args::parse();
     let work = Duration::from_secs(u64::from(args.work_minutes) * 60);
