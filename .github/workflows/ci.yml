@@ -1,0 +1,175 @@
+name: CI/CD
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+  release:
+    types: [published]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - run: cargo fmt --check
+      - run: cargo clippy -- -D warnings
+      - run: cargo test
+
+  build-linux:
+    name: Build Linux
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --release
+
+      - name: Install cargo-deb
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deb
+      - run: cargo deb
+
+      - name: Install cargo-generate-rpm
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-generate-rpm
+      - run: cargo generate-rpm
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: |
+            target/release/rudoro
+            target/debian/*.deb
+            target/generate-rpm/*.rpm
+          if-no-files-found: error
+
+  build-macos:
+    name: Build macOS (${{ matrix.target }})
+    if: github.event_name == 'release'
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: macos-13
+            target: x86_64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - run: cargo build --release --target ${{ matrix.target }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/rudoro
+
+  release:
+    name: Upload Release Assets
+    if: github.event_name == 'release'
+    needs: [build-linux, build-macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Compute SHA256 checksums
+        id: sha256
+        run: |
+          echo "linux=$(sha256sum artifacts/linux/rudoro | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "macos-arm64=$(sha256sum artifacts/aarch64-apple-darwin/rudoro | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "macos-x86_64=$(sha256sum artifacts/x86_64-apple-darwin/rudoro | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p assets
+          cp artifacts/linux/rudoro assets/rudoro-x86_64-linux
+          cp artifacts/aarch64-apple-darwin/rudoro assets/rudoro-aarch64-apple-darwin
+          cp artifacts/x86_64-apple-darwin/rudoro assets/rudoro-x86_64-apple-darwin
+          cp artifacts/linux/*.deb assets/ 2>/dev/null || true
+          cp artifacts/linux/*.rpm assets/ 2>/dev/null || true
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate Arch Linux PKGBUILD
+        run: |
+          cat > PKGBUILD << HEREDOC
+          # Maintainer: nerdy-dav
+          # Contributor: nerdy-dav
+          pkgname=rudoro
+          pkgver=${{ steps.version.outputs.version }}
+          pkgrel=1
+          pkgdesc="A TUI Pomodoro timer written in Rust"
+          arch=('x86_64')
+          url="https://github.com/nerdy-dav/rudoro"
+          license=('MIT')
+          depends=('gcc-libs')
+          makedepends=('cargo')
+          source=("https://github.com/nerdy-dav/rudoro/archive/v\$pkgver.tar.gz")
+          sha256sums=('SKIP')
+          build() {
+            cd "\$srcdir/\$pkgname-\$pkgver"
+            cargo build --release --frozen
+          }
+          package() {
+            cd "\$srcdir/\$pkgname-\$pkgver"
+            install -Dm755 target/release/rudoro "\$pkgdir/usr/bin/rudoro"
+            install -Dm644 LICENSE "\$pkgdir/usr/share/licenses/\$pkgname/LICENSE"
+          }
+          HEREDOC
+
+      - name: Generate Homebrew formula
+        run: |
+          cat > rudoro.rb << HEREDOC
+          class Rudoro < Formula
+            desc "A TUI Pomodoro timer written in Rust"
+            homepage "https://github.com/nerdy-dav/rudoro"
+            version "${{ steps.version.outputs.version }}"
+            license "MIT"
+
+            on_macos do
+              if Hardware::CPU.arm?
+                url "https://github.com/nerdy-dav/rudoro/releases/download/v${{ steps.version.outputs.version }}/rudoro-aarch64-apple-darwin"
+                sha256 "${{ steps.sha256.outputs.macos-arm64 }}"
+              else
+                url "https://github.com/nerdy-dav/rudoro/releases/download/v${{ steps.version.outputs.version }}/rudoro-x86_64-apple-darwin"
+                sha256 "${{ steps.sha256.outputs.macos-x86_64 }}"
+              end
+            end
+
+            def install
+              bin.install "rudoro"
+            end
+          end
+          HEREDOC
+
+      - name: Upload to GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            PKGBUILD
+            rudoro.rb
+            assets/*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-artifacts
+          path: |
+            PKGBUILD
+            rudoro.rb
+            assets/*
