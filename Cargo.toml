@@ -6,6 +6,11 @@ description = "A TUI Pomodoro timer written in Rust"
 authors = ["Davin Benfield"]
 license = "MIT"
 
+[package.metadata.generate-rpm]
+assets = [
+    { source = "target/release/rudoro", dest = "/usr/bin/rudoro", mode = "755" },
+]
+
 [dependencies]
 clap = { version = "=4.5.27", features = ["derive"] }
 crossterm = "0.27"
