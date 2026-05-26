@@ -83,7 +83,11 @@ pub fn draw(f: &mut Frame, app: &App) {
         );
     let vchunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Min(0), Constraint::Length(1), Constraint::Min(0)])
+        .constraints([
+            Constraint::Min(0),
+            Constraint::Length(1),
+            Constraint::Min(0),
+        ])
         .split(inner);
     f.render_widget(countdown, vchunks[1]);
 
@@ -104,4 +108,34 @@ pub fn draw(f: &mut Frame, app: &App) {
         .alignment(Alignment::Center)
         .style(Style::default().fg(Color::DarkGray));
     f.render_widget(hints, main[2]);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn format_countdown_zero() {
+        assert_eq!(format_countdown(Duration::ZERO), "00:00");
+    }
+
+    #[test]
+    fn format_countdown_seconds_only() {
+        assert_eq!(format_countdown(Duration::from_secs(5)), "00:05");
+        assert_eq!(format_countdown(Duration::from_secs(59)), "00:59");
+    }
+
+    #[test]
+    fn format_countdown_minutes_and_seconds() {
+        assert_eq!(format_countdown(Duration::from_secs(65)), "01:05");
+        assert_eq!(format_countdown(Duration::from_secs(603)), "10:03");
+        assert_eq!(format_countdown(Duration::from_secs(3599)), "59:59");
+    }
+
+    #[test]
+    fn format_countdown_hours() {
+        assert_eq!(format_countdown(Duration::from_secs(3600)), "1:00:00");
+        assert_eq!(format_countdown(Duration::from_secs(3661)), "1:01:01");
+        assert_eq!(format_countdown(Duration::from_secs(7384)), "2:03:04");
+    }
 }
