@@ -233,7 +233,9 @@ mod tests {
 
         assert!(app.paused);
         assert!(app.ends_at.is_none());
-        assert!(app.remaining > Duration::from_secs(54) && app.remaining <= Duration::from_secs(55));
+        assert!(
+            app.remaining > Duration::from_secs(54) && app.remaining <= Duration::from_secs(55)
+        );
     }
 
     #[test]
