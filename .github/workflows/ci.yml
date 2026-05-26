@@ -72,7 +72,7 @@ jobs:
   release:
     name: Upload Release Assets
     if: github.event_name == 'release'
-    needs: [build-linux, build-macos]
+    needs: [build-linux]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
