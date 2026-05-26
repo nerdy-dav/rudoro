@@ -34,15 +34,11 @@ jobs:
       - run: cargo build --release
 
       - name: Install cargo-deb
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-deb
+        run: cargo install cargo-deb
       - run: cargo deb
 
       - name: Install cargo-generate-rpm
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-generate-rpm
+        run: cargo install cargo-generate-rpm
       - run: cargo generate-rpm
 
       - uses: actions/upload-artifact@v4
